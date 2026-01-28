@@ -1,7 +1,7 @@
-#[derive(Clone)]
+use sqlx::PgPool;
 
+#[derive(Clone)]
 pub struct AppState {
-  // futuramente:
-  // pub db_pool: PgPool,
+  pub db_pool: PgPool,
   // pub config : AppConfig,
 }

@@ -4,16 +4,20 @@ use std::net::SocketAddr;
 mod http;
 mod shared;
 mod config;
+mod db;
 
 use shared::app_state::AppState;
 use config::env::AppConfig;
+use db::create_pool;
 
 #[tokio::main]
 async fn main() {
   dotenvy::dotenv().ok();
   let config = AppConfig::from_env();
 
-  let state = AppState {};
+  let db_pool = create_pool(&config.database_url).await;
+
+  let state = AppState { db_pool };
 
   let app = Router::new()
     .merge(http::routes::create_routes(state));
