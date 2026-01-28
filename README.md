@@ -12,7 +12,18 @@ Este projeto tem como objetivo:
 🚧 Projeto em estágio inicial.
 
 Neste momento, o repositório contém apenas a estrutura básica do projeto.
+
 O projeto utiliza a Rust Edition 2021 por ser o padrão moderno e estável da linguagem, oferecendo melhor ergonomia, compatibilidade com o ecossistema async e previsibilidade no código, sem abrir mão de estabilidade.
+
+## Arquitetura (visão inicial)
+
+O projeto segue uma arquitetura em camadas:
+
+- **HTTP**: handlers e middlewares
+- **Domain**: regras de negócio
+- **Repository**: acesso a dados
+- **DB**: configuração e migrações
+- **Shared**: tipos e utilidades compartilhadas
 
 ## Funcionalidades planejadas (MVP)
 - Autenticação de usuários
