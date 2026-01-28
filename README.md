@@ -44,4 +44,12 @@ cargo run
 ```
 A API estará disponĩvel em http://localhost:3000.
 
+## Endpoints disponíveis
+
+### Health check
+```http
+GET /health
+```
+
+
 > Este projeto está sendo desenvolvido publicamente, com commits pequenos e bem documentados.
