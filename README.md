@@ -37,4 +37,11 @@ O projeto segue uma arquitetura em camadas:
 - PostgreSQL
 - SQLx
 
+## Como executar
+
+```bash
+cargo run
+```
+A API estará disponĩvel em http://localhost:3000.
+
 > Este projeto está sendo desenvolvido publicamente, com commits pequenos e bem documentados.
