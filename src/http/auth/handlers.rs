@@ -8,8 +8,13 @@ use axum::{
 use crate::{
     shared::app_state::AppState,
     repositories::user_repository::UserRepository,
-    http::auth::dto::{SignupRequest, SignupResponse},
-    shared::crypto::hash_password,
+    http::auth::dto::{
+        SignupRequest,
+        SignupResponse,
+        LoginRequest,
+        LoginResponse,
+    },
+    shared::crypto::{hash_password, verify_password},
 };
 
 pub async fn signup(
@@ -31,4 +36,29 @@ pub async fn signup(
     };
 
     Ok((StatusCode::CREATED, Json(response)))
+}
+
+pub async fn login(
+    State(state): State<AppState>,
+    Json(payload): Json<LoginRequest>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let repo = UserRepository::new(&state.db_pool);
+
+    let user = match repo.find_by_email(&payload.email).await {
+        Ok(Some(user)) => user,
+        _ => return Err(StatusCode::UNAUTHORIZED),
+    };
+
+    let password_ok = verify_password(&payload.password, &user.password_hash);
+
+    if !password_ok {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    let response = LoginResponse {
+        id: user.id,
+        email: user.email,
+    };
+
+    Ok((StatusCode::OK, Json(response)))
 }
