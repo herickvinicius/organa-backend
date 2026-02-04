@@ -48,12 +48,13 @@ pub async fn signup(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let response = SignupResponse {
-        id: user.id,
-        email: user.email,
-    };
-
-    Ok((StatusCode::CREATED, Json(response)))
+    Ok((
+        StatusCode::CREATED,
+        Json(SignupResponse {
+            id: user.id,
+            email: user.email,
+        }),
+    ))
 }
 
 pub async fn login(
