@@ -32,6 +32,7 @@ use crate::{
         SignupResponse,
         LoginRequest,
         LoginResponse,
+        RefreshResponse,
     },
 };
 
@@ -114,6 +115,88 @@ pub async fn login(
         (
             headers,
             Json(LoginResponse {
+                access_token,
+            }),
+        ),
+    ))
+}
+
+pub async fn refresh(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<impl IntoResponse, StatusCode> {
+    // read cookie
+    let cookie_header = headers
+        .get(header::COOKIE)
+        .and_then(|v| v.to_str().ok())
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    let refresh_token = cookie_header
+        .split(',')
+        .find_map(|cookie| {
+            let cookie = cookie.trim();
+            cookie
+                .strip_prefix("refresh_token=")
+                .map(|v| v.to_string())
+        })
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    
+    let refresh_token_hash = hash_refresh_token(&refresh_token);
+
+    // find hash on db
+    let repo = RefreshTokenRepository::new(&state.db_pool);
+    let stored = repo
+        .find_valid(&refresh_token_hash)
+        .await
+        .map_err(|_| StatusCode::UNAUTHORIZED)?
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    // check expiration
+    if stored.expires_at < OffsetDateTime::now_utc() {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    // rotate refresh token
+    repo.revoke(stored.id).await.ok();
+
+    let new_refresh = generate_refresh_token();
+    let new_refresh_hash = hash_refresh_token(&new_refresh);
+
+    repo.create(
+        stored.user_id,
+        &new_refresh_hash,
+        OffsetDateTime::now_utc() + state.refresh_token_ttl,
+    )
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // generate new access token
+    let access_token = generate_access_token(
+        stored.user_id,
+        &state.jwt_secret,
+        state.access_token_ttl,
+    )
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // update cookie
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::SET_COOKIE,
+        format!(
+            "refresh_token={}; HttpOnly; Path=/auth/refresh; Max-Age={}",
+            new_refresh,
+            state.refresh_token_ttl.whole_seconds()
+        )
+        .parse()
+        .unwrap(),
+    );
+
+    // response
+    Ok((
+        StatusCode::OK,
+        (
+            headers,
+            Json(RefreshResponse {
                 access_token,
             }),
         ),

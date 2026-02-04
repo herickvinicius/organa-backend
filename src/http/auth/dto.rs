@@ -23,3 +23,8 @@ pub struct LoginRequest {
 pub struct LoginResponse {
     pub access_token: String,
 }
+
+#[derive(Serialize)]
+pub struct RefreshResponse {
+    pub access_token: String,
+}
