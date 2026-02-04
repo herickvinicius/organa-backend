@@ -1,20 +1,38 @@
 use axum::{
     extract::State,
-    http::StatusCode,
-    Json,
+    http::{
+        StatusCode,
+        header,
+        HeaderMap,
+    },
     response::IntoResponse,
+    Json,
 };
+use time::OffsetDateTime;
 
 use crate::{
-    shared::app_state::AppState,
-    repositories::user_repository::UserRepository,
+    shared::{
+        app_state::AppState,
+        crypto::{
+            verify_password,
+            hash_password,
+        },
+        jwt::generate_access_token,
+        refresh_token::{
+            generate_refresh_token,
+            hash_refresh_token,
+        },
+    },
+    repositories::{
+        user_repository::UserRepository,
+        refresh_token_repository::RefreshTokenRepository,
+    },
     http::auth::dto::{
         SignupRequest,
         SignupResponse,
         LoginRequest,
         LoginResponse,
     },
-    shared::crypto::{hash_password, verify_password},
 };
 
 pub async fn signup(
@@ -42,23 +60,58 @@ pub async fn login(
     State(state): State<AppState>,
     Json(payload): Json<LoginRequest>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let repo = UserRepository::new(&state.db_pool);
+    // set repos
+    let user_repo = UserRepository::new(&state.db_pool);
+    let refresh_token_repo = RefreshTokenRepository::new(&state.db_pool);
 
-    let user = match repo.find_by_email(&payload.email).await {
+    // verify user and password
+    let user = match user_repo.find_by_email(&payload.email).await {
         Ok(Some(user)) => user,
         _ => return Err(StatusCode::UNAUTHORIZED),
     };
 
-    let password_ok = verify_password(&payload.password, &user.password_hash);
-
-    if !password_ok {
+    if !verify_password(&payload.password, &user.password_hash) {
         return Err(StatusCode::UNAUTHORIZED);
     }
 
+    // create access token
+    let access_token = generate_access_token(
+        user.id,
+        &state.jwt_secret,
+        state.access_token_ttl,
+    )
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // create refresh token
+    let refresh_token = generate_refresh_token();
+    let refresh_token_hash = hash_refresh_token(&refresh_token);
+    let expires_at =
+        OffsetDateTime::now_utc() + state.refresh_token_ttl;
+
+    // persist refresh token
+    refresh_token_repo
+        .create(user.id, &refresh_token_hash, expires_at)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // set cookie
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::SET_COOKIE,
+        format!(
+            "refresh_token={}; HttpOnly; Path=/auth/refresh; Max-Age={}",
+            refresh_token,
+            state.refresh_token_ttl.whole_seconds()
+        )
+        .parse()
+        .unwrap(),
+    );
+
+    // response
     let response = LoginResponse {
         id: user.id,
-        email: user.email,
+        access_token,
     };
 
-    Ok((StatusCode::OK, Json(response)))
+    Ok((headers, Json(response)))
 }
