@@ -29,10 +29,8 @@ use crate::{
     },
     http::auth::dto::{
         SignupRequest,
-        SignupResponse,
         LoginRequest,
-        LoginResponse,
-        RefreshResponse,
+        AuthResponse,
     },
 };
 
@@ -40,20 +38,60 @@ pub async fn signup(
     State(state): State<AppState>,
     Json(payload): Json<SignupRequest>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let repo = UserRepository::new(&state.db_pool);
+    let user_repo = UserRepository::new(&state.db_pool);
+    let refresh_token_repo = RefreshTokenRepository::new(&state.db_pool);
 
+    // hash the password
     let password_hash = hash_password(&payload.password);
 
-    let user = repo
+    // create user
+    let user = user_repo
         .create(&payload.email, &password_hash)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    // generate access token
+    let access_token = generate_access_token(
+        user.id,
+        &state.jwt_secret,
+        state.access_token_ttl,
+    )
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // generate refresh token
+    let refresh_token = generate_refresh_token();
+    let refresh_token_hash = hash_refresh_token(&refresh_token);
+    let expires_at = OffsetDateTime::now_utc() + state.refresh_token_ttl;
+    
+    // persist refresh token
+    refresh_token_repo
+        .create(
+            user.id,
+            &refresh_token_hash,
+            expires_at,
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // set cookie
+    let cookie = format!(
+        "refresh_token={}; HttpOnly; Path=/auth/refresh; Max-Age={}",
+        refresh_token,
+        state.refresh_token_ttl.whole_seconds()
+    );
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::SET_COOKIE,
+        cookie.parse().unwrap(),
+    );
+
+    // response
     Ok((
         StatusCode::CREATED,
-        Json(SignupResponse {
-            id: user.id,
-            email: user.email,
+        headers,
+        Json(AuthResponse {
+            access_token,
         }),
     ))
 }
@@ -97,27 +135,25 @@ pub async fn login(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // set cookie
+    let cookie = format!(
+        "refresh_token={}; HttpOnly; Path=/auth/refresh; Max-Age={}",
+        refresh_token,
+        state.refresh_token_ttl.whole_seconds()
+    );
+
     let mut headers = HeaderMap::new();
     headers.insert(
         header::SET_COOKIE,
-        format!(
-            "refresh_token={}; HttpOnly; Path=/auth/refresh; Max-Age={}",
-            refresh_token,
-            state.refresh_token_ttl.whole_seconds()
-        )
-        .parse()
-        .unwrap(),
+        cookie.parse().unwrap(),
     );
 
     // response
     Ok((
         StatusCode::OK,
-        (
-            headers,
-            Json(LoginResponse {
-                access_token,
-            }),
-        ),
+        headers,
+        Json(AuthResponse {
+            access_token,
+        }),
     ))
 }
 
@@ -178,27 +214,25 @@ pub async fn refresh(
     )
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // update cookie
+    // set cookie
+    let cookie = format!(
+        "refresh_token={}; HttpOnly; Path=/auth/refresh; Max-Age={}",
+        refresh_token,
+        state.refresh_token_ttl.whole_seconds()
+    );
+
     let mut headers = HeaderMap::new();
     headers.insert(
         header::SET_COOKIE,
-        format!(
-            "refresh_token={}; HttpOnly; Path=/auth/refresh; Max-Age={}",
-            new_refresh,
-            state.refresh_token_ttl.whole_seconds()
-        )
-        .parse()
-        .unwrap(),
+        cookie.parse().unwrap(),
     );
 
     // response
     Ok((
         StatusCode::OK,
-        (
-            headers,
-            Json(RefreshResponse {
-                access_token,
-            }),
-        ),
+        headers,
+        Json(AuthResponse {
+            access_token,
+        }),
     ))
 }
