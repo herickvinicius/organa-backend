@@ -108,10 +108,13 @@ pub async fn login(
     );
 
     // response
-    let response = LoginResponse {
-        id: user.id,
-        access_token,
-    };
-
-    Ok((headers, Json(response)))
+    Ok((
+        StatusCode::OK,
+        (
+            headers,
+            Json(LoginResponse {
+                access_token,
+            }),
+        ),
+    ))
 }

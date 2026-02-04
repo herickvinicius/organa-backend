@@ -21,6 +21,5 @@ pub struct LoginRequest {
 
 #[derive(Serialize)]
 pub struct LoginResponse {
-    pub id: Uuid,
     pub access_token: String,
 }
