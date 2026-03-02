@@ -4,6 +4,7 @@ use std::net::SocketAddr;
 mod domain;
 mod repositories;
 mod http;
+mod services;
 mod shared;
 mod config;
 mod db;

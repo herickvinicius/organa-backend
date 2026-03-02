@@ -81,7 +81,10 @@ impl<'a> AuthService<'a> {
             .await
             .map_err(|_| AuthError::DatabaseError)?;
         
-        Ok((access_token, refresh_token))
+        Ok(AuthResult {
+            access_token,
+            refresh_token,
+        })
     }
 
     pub async fn refresh(
@@ -116,7 +119,7 @@ impl<'a> AuthService<'a> {
         self.refresh_tokens
             .create(
                 stored.user_id,
-                &new_rerfesh_token_hash,
+                &new_refresh_token_hash,
                 expires_at,
             )
             .await
@@ -130,6 +133,9 @@ impl<'a> AuthService<'a> {
         )
         .map_err(|_| AuthError::JwtError)?;
 
-        Ok((access_token, new_refresh_token))
+        Ok(AuthResult {
+            access_token,
+            refresh_token: new_refresh_token,
+        })
     }
 }
