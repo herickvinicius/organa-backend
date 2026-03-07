@@ -18,9 +18,7 @@ use crate::{
     },
     repositories::{
         user_repository::UserRepository,
-        refresh_token_repository::RefreshTokenRepository,
     },
-    services::auth::AuthService,
     http::{
         auth::dto::{
             SignupRequest,
@@ -39,7 +37,6 @@ pub async fn signup(
     Json(payload): Json<SignupRequest>,
 ) -> Result<impl IntoResponse, StatusCode> {
     let user_repo = UserRepository::new(&state.db_pool);
-    let refresh_token_repo = RefreshTokenRepository::new(&state.db_pool);
 
     // hash the password
     let password_hash = hash_password(&payload.password);
@@ -50,15 +47,8 @@ pub async fn signup(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Authenticate
-    let auth_service = AuthService::new(
-        refresh_token_repo,
-        &state.jwt_secret,
-        state.access_token_ttl,
-        state.refresh_token_ttl,
-    );
-
-    let result = auth_service
+    let result = state
+        .auth_service
         .authenticate(user.id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -89,7 +79,6 @@ pub async fn login(
 ) -> Result<impl IntoResponse, StatusCode> {
     // set repos
     let user_repo = UserRepository::new(&state.db_pool);
-    let refresh_token_repo = RefreshTokenRepository::new(&state.db_pool);
 
     // verify user and password
     let user = match user_repo.find_by_email(&payload.email).await {
@@ -101,14 +90,8 @@ pub async fn login(
         return Err(StatusCode::UNAUTHORIZED);
     }
 
-    let auth_service = AuthService::new(
-        refresh_token_repo,
-        &state.jwt_secret,
-        state.access_token_ttl,
-        state.refresh_token_ttl,
-    );
-
-    let result = auth_service
+    let result = state
+        .auth_service
         .authenticate(user.id)
         .await
         .map_err(|_| StatusCode::UNAUTHORIZED)?;
@@ -142,16 +125,8 @@ pub async fn refresh(
         .ok_or(StatusCode::UNAUTHORIZED)?;
     
     // Refresh
-    let refresh_token_repo = RefreshTokenRepository::new(&state.db_pool);
-
-    let auth_service = AuthService::new(
-        refresh_token_repo,
-        &state.jwt_secret,
-        state.access_token_ttl,
-        state.refresh_token_ttl,
-    );
-
-    let result = auth_service
+    let result = state
+        .auth_service
         .refresh(&refresh_token)
         .await
         .map_err(|_| StatusCode::UNAUTHORIZED)?;

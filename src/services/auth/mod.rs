@@ -2,6 +2,6 @@ pub mod auth_service;
 
 pub use auth_service::{
     AuthService,
-    AuthResult,
-    AuthError,
+    // AuthResult,
+    // AuthError,
 };

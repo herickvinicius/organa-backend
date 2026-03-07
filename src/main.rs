@@ -13,6 +13,8 @@ use shared::app_state::AppState;
 use config::env::AppConfig;
 use db::create_pool;
 
+use crate::services::auth::AuthService;
+
 #[tokio::main]
 async fn main() {
   dotenvy::dotenv().ok();
@@ -20,13 +22,19 @@ async fn main() {
 
   let db_pool = create_pool(&config.database_url).await;
 
-  // TODO: access and refresh tokens here
+  let auth_service = AuthService::new(
+    db_pool.clone(),
+    config.jwt_secret.clone(),
+    config.access_token_ttl,
+    config.refresh_token_ttl,
+  );
 
   let state = AppState { 
     db_pool,
     jwt_secret: config.jwt_secret,
     access_token_ttl: config.access_token_ttl,
     refresh_token_ttl: config.refresh_token_ttl,
+    auth_service,
   };
 
   let app = Router::new()
