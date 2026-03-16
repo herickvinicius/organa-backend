@@ -36,9 +36,20 @@ O projeto segue uma arquitetura em camadas:
 - Axum (API HTTP)
 - PostgreSQL
 - SQLx
+- Docker
 
 ## Como executar
+Assumindo que você já têm docker, sqlx-cli e cargo instalados.
 
+Suba o banco com:
+```bash
+docker compose up -d
+```
+Após subir o banco, execute as migrations:
+```bash
+sqlx migrate run
+```
+Depois rode a aplicação com:
 ```bash
 cargo run
 ```
@@ -49,6 +60,8 @@ A API estará disponĩvel em http://localhost:3000.
 ### Health check
 ```http
 GET /health
+
+Novos endpoints serão documentados aqui ou devo mover tudo pra um API docs.
 ```
 
 
